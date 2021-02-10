@@ -32,17 +32,25 @@ def main():
 
     # 过期文章删除
     def outdate(query_list, Friendspoor, days):
+        print('\n')
+        print('-------执行删除规则----------')
+        out_date_post=0
         for query_i in query_list:
             time = query_i.get('time')
             try:
                 query_time = datetime.datetime.strptime(time, "%Y-%m-%d")
                 if (today - query_time).days > days:
                     delete = Friendspoor.create_without_data(query_i.get('objectId'))
+                    out_date_post+=1
                     delete.destroy()
             except Exception as e:
                 delete = Friendspoor.create_without_data(query_i.get('objectId'))
                 delete.destroy()
+                out_date_post+=1
                 print(e)
+        print('\n')
+        print('-------结束删除规则----------')
+        print('共删除了%s篇文章'%out_date_post)
 
     # leancloud数据  用户信息存储
     def leancloud_push_userinfo(friend_poordic):
@@ -168,31 +176,41 @@ def main():
         error_sitmap = 'false'
         try:
             result = get_data(link + '/sitemap.xml')
+            soup = BeautifulSoup(result, 'html.parser')
+            loc = soup.find_all('loc')
+            if len(loc) == 0:
+                error_sitmap = 'true'
+                print('该网站没有sitemap')
+            for loc_item in loc[0:5]:
+                try:
+                    post_link = loc_item.text
+                    result = get_data(post_link)
+                    soup = BeautifulSoup(result, 'html.parser')
+                    time = soup.find('time')
+                    title = soup.find('title')
+                    strtitle = title.text
+                    titlesplit = strtitle.split("|", 1)
+                    strtitle = titlesplit[0].strip()
+                    print(time.text)
+                    print(strtitle)
+                    print(post_link)
+                    print('-----------结束sitemap规则----------')
+                    print('\n')
+                    post_info = {
+                        'title': strtitle,
+                        'time': time.text,
+                        'link': post_link,
+                        'name': user_info[0],
+                        'img': user_info[2]
+                    }
+                    post_poor.append(post_info)
+                except Exception as e:
+                    print('爬取sitemap错误')
+                    print(e)
+                    error_sitmap = 'true'
         except:
+            print('无法请求sitemap')
             error_sitmap = 'true'
-        soup = BeautifulSoup(result, 'html.parser')
-        loc = soup.find_all('loc')
-        post_link = loc[0].text
-        result = get_data(post_link)
-        soup = BeautifulSoup(result, 'html.parser')
-        time = soup.find('time')
-        title = soup.find('title')
-        strtitle = title.text
-        titlesplit = strtitle.split("|", 1)
-        strtitle = titlesplit[0].strip()
-        print(time.text)
-        print(strtitle)
-        print(post_link)
-        print('-----------结束sitemap规则----------')
-        print('\n')
-        post_info = {
-            'title': strtitle,
-            'time': time.text,
-            'link': post_link,
-            'name': user_info[0],
-            'img': user_info[2]
-        }
-        post_poor.append(post_info)
         return error_sitmap
 
     # 从主页获取文章
@@ -224,27 +242,35 @@ def main():
                 time_created = item.find('time', {"class": "post-meta-date-created"})
                 if time_created:
                     pass
+                    print('有生成时间标签')
                 else:
+                    print('无生成时间标签')
                     time_created = item
                 if time_created.find(text=lasttime):
                     error_sitmap = 'false'
                     print(lasttime)
                     a = item.find('a')
                     # print(item.find('a'))
+                    alink =  a['href']
+                    alinksplit = alink.split("/", 1)
+                    stralink =  alinksplit[1].strip()
+                    if link[-1] != '/':
+                        link = link + '/'
                     print(a.text)
-                    print(link + a['href'])
+                    print(link + stralink)
                     print("-----------结束主页规则----------")
                     print('\n')
                     post_info = {
                         'title': a.text,
                         'time': lasttime,
-                        'link': link + a['href'],
+                        'link': link + stralink,
                         'name': user_info[0],
                         'img': user_info[2]
                     }
                     post_poor.append(post_info)
         else:
             error_sitmap = 'true'
+            print('不是类似的butterfly主题！')
         return error_sitmap
 
     # 主方法获取友链池
@@ -290,10 +316,13 @@ def main():
             error = get_last_post(item)
             if error == 'true':
                 error = sitmap_get(item)
-        except:
+        except Exception as e:
+            print('\n')
             print(item, "发生异常")
+            print(e)
             error_count+=1
         item.append(error)
+    print('\n')
     print("一共进行%s次"% total_count)
     print("一共失败%s次"% error_count)
     leancloud_push_userinfo(friend_poor)
