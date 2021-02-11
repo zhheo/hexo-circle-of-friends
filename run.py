@@ -325,14 +325,7 @@ def main():
         print('----------------------')
         for index, item in enumerate(link_list):
             link = item.get('href')
-            namelist = item.find('span')
-
-            try:
-                name = namelist.text
-                print(name)
-            except:
-                print('出错了')
-                continue
+            name = item.get('title')
 
             try:
                 img = imglist[index].get('data-lazy-src')
