@@ -328,9 +328,15 @@ def main():
             name = item.get('title')
 
             try:
-                img = imglist[index].get('data-lazy-src')
+                if len(item.find_all('img')) > 1:
+                    imglist = item.find_all('img')
+                    img = imglist[1].get('data-lazy-src')
+                else:
+                    imglist = item.find_all('img')
+                    img = imglist[0].get('data-lazy-src')
             except:
-                img = ''
+                continue
+            
             if "#" in link:
                 pass
             else:
