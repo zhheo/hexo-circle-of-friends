@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import requests
 from bs4 import BeautifulSoup
 import datetime
@@ -8,6 +9,121 @@ import re
 
 
 def main():
+        # 时间查找(中文、标准）
+        def time_zero_plus(str):
+            if len(str) < 2:
+                str = '0' + str
+            return str
+        def find_time(str):
+            try:
+                timere_ch = re.compile(r'[0-9]{4}\s*年\s*[0-9]{1,2}\s*月\s*[0-9]{1,2}\s*日', re.S)
+                time_ch = re.findall(timere_ch, str)[0]
+                print('找到中文时间', time_ch)
+                year = time_ch.split('年')[0].strip()
+                month = time_zero_plus(time_ch.split('年')[1].split('月')[0].strip())
+                day = time_zero_plus(time_ch.split('年')[1].split('月')[1].split('日')[0].strip())
+                time = year + '-' + month + '-' + day
+                print('获得标准时间', time)
+            except:
+                try:
+                    timere = re.compile(r'[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}', re.S)
+                    time = re.findall(timere, str)[0]
+                    timelist = time.split('-')
+                    time = timelist[0] + '-' + time_zero_plus(timelist[1]) + '-' + time_zero_plus(timelist[2])
+
+                    print('获得标准时间', time)
+                except:
+                    print('没找到符合要求的时间')
+            return time
+
+        # 文章去重
+        def delete_same_article(orign_friend_postpoor):
+            friend_postpoor = []
+            friend_poortitle = []
+            for item in orign_friend_postpoor:
+                if item['title'] not in friend_poortitle:
+                    friend_poortitle.append(item['title'])
+                    friend_postpoor.append(item)
+                else:
+                    print('-----------------')
+                    print('重复1篇文章标题，已删除')
+                    print('-----------------')
+            return  friend_postpoor
+
+        # 友链链接去重
+        def delete_same_link(orign_friend_poordic):
+            friend_poordic = []
+            friend_poorlink = []
+            for item in orign_friend_poordic:
+                if item[1] not in friend_poorlink:
+                    friend_poorlink.append(item[1])
+                    friend_poordic.append(item)
+                else:
+                    print('-----------------')
+                    print('重复1条友链链接，已删除')
+                    print('-----------------')
+            return  friend_poordic
+
+        # gitee适配
+        def reg(info_list, user_info, source):
+            print('----')
+            for item in info_list:
+                reg = re.compile('(?<=' + item + ': ).*')
+                result = re.findall(reg, str(source))
+                result = result[0].replace('\r', ' ')
+                print(result)
+                user_info.append(result)
+
+        # 从gitee获取friendlink
+        def kang_api(friend_poor):
+            print('\n')
+            print('-------获取gitee友链----------')
+            baselink = 'https://gitee.com'
+            errortimes = 0
+            f = open('userinfo.txt')
+            git_info_list = ['owner', 'repo', 'state']
+            user_info_txt = []
+            info = f.read()
+            reg(git_info_list, user_info_txt, info)
+            print(user_info_txt)
+            try:
+                for number in range(1, 100):
+                    print(number)
+                    gitee = get_data('https://gitee.com/' +
+                                     user_info_txt[0] +
+                                     '/' +
+                                     user_info_txt[1] +
+                                     '/issues?state=' + user_info_txt[2] + '&page=' + str(number))
+                    soup = BeautifulSoup(gitee, 'html.parser')
+                    main_content = soup.find_all(id='git-issues')
+                    linklist = main_content[0].find_all('a', {'class': 'title'})
+                    if len(linklist) == 0:
+                        print('爬取完毕')
+                        print('失败了%r次' % errortimes)
+                        break
+                    for item in linklist:
+                        issueslink = baselink + item['href']
+                        issues_page = get_data(issueslink)
+                        issues_soup = BeautifulSoup(issues_page, 'html.parser')
+                        try:
+                            issues_linklist = issues_soup.find_all('code')
+                            source = issues_linklist[0].text
+                            user_info = []
+                            info_list = ['name', 'link', 'avatar']
+                            reg(info_list, user_info, source)
+                            print(user_info)
+                            if user_info[1] != '你的链接':
+                                friend_poor.append(user_info)
+                        except:
+                            errortimes += 1
+                            continue
+            except Exception as e:
+                print('爬取完毕', e)
+                print(e.__traceback__.tb_frame.f_globals["__file__"])
+                print(e.__traceback__.tb_lineno)
+
+            print('------结束gitee友链获取----------')
+            print('\n')
         # 全部删除
         def deleteall():
             Friendlist = leancloud.Object.extend('friend_list')
@@ -206,9 +322,8 @@ def main():
                     for i, new_loc_item in enumerate(new_loc[0:5]):
                         post_link = new_loc_item.text
                         result = get_data(post_link)
-                        timere = re.compile(r'[0-9]{4}-.{1,2}-.{1,2}', re.S)
                         try:
-                            time = re.findall(timere, str(result))[0]
+                            time = find_time(str(result))
                             soup = BeautifulSoup(result, 'html.parser')
                             title = soup.find('title')
                             strtitle = title.text
@@ -317,16 +432,26 @@ def main():
         soup = BeautifulSoup(result, 'html.parser')
         main_content = soup.find_all(id='article-container')
         link_list = main_content[0].find_all('a')
-        imglist = main_content[0].find_all('img',{'class':'flink-avatar'})
         friend_poor = []
         post_poor = []
         print('----------------------')
         print('-----------！！开始执行友链获取任务！！----------')
         print('----------------------')
+        try:
+            kang_api(friend_poor)
+        except:
+            print('读取gitee友链失败')
         for index, item in enumerate(link_list):
             link = item.get('href')
-            name = item.get('title')
-
+            if link.count('/') > 3:
+                continue
+            if item.get('title'):
+                name = item.get('title')
+            else:
+                try:
+                    name = item.find('span').text
+                except:
+                    continue
             try:
                 if len(item.find_all('img')) > 1:
                     imglist = item.find_all('img')
@@ -336,7 +461,6 @@ def main():
                     img = imglist[0].get('data-lazy-src')
             except:
                 continue
-            
             if "#" in link:
                 pass
             else:
@@ -352,6 +476,8 @@ def main():
                 print('头像链接%r' % img)
                 print('主页链接%r' % link)
                 friend_poor.append(user_info)
+        friend_poor = delete_same_link(friend_poor)
+        print('当前友链数量',len( friend_poor))
         print('----------------------')
         print('-----------！！结束友链获取任务！！----------')
         print('----------------------')
