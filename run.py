@@ -287,7 +287,10 @@ def main():
         # 请求连接
         def get_data(link):
             try:
-                r = requests.get(link, timeout=15)
+                headers = {
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 YaBrowser/19.7.0.1635 Yowser/2.5 Safari/537.36',
+                }
+                r = requests.get(link, timeout=15, headers=headers)
                 r.encoding = 'utf-8-sig'
                 result = r.text
             except:
