@@ -363,7 +363,11 @@ def main():
             print('执行链接：', link)
             result = get_data(link)
             soup = BeautifulSoup(result, 'html.parser')
-            main_content = soup.find_all(id='recent-posts')
+            postid = ['recent-posts','BLOG_CARD','post-panel','main','board','articles']
+            for item in postid:
+                main_content = soup.find_all(id=item)
+                if main_content:
+                    break
             time_excit = soup.find_all('time')
             if main_content and time_excit:
                 error_sitmap = 'true'
