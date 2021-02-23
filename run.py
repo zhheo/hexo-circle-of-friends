@@ -4,8 +4,10 @@ from bs4 import BeautifulSoup
 import datetime
 from operator import itemgetter
 import leancloud
-import sys
 import re
+import sys
+from theme.butterfly import butterfly
+from theme.matery import matery
 
 
 def main():
@@ -287,10 +289,7 @@ def main():
         # 请求连接
         def get_data(link):
             try:
-                headers = {
-                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 YaBrowser/19.7.0.1635 Yowser/2.5 Safari/537.36',
-                }
-                r = requests.get(link, timeout=15, headers=headers)
+                r = requests.get(link, timeout=15)
                 r.encoding = 'utf-8-sig'
                 result = r.text
             except:
@@ -357,69 +356,6 @@ def main():
             print('\n')
             return error_sitmap
 
-        # 从主页获取文章
-        def get_last_post(user_info):
-            error_sitmap = 'false'
-            link = user_info[1]
-            print('\n')
-            print('-------执行主页规则----------')
-            print('执行链接：', link)
-            result = get_data(link)
-            soup = BeautifulSoup(result, 'html.parser')
-            main_content = soup.find_all(id='recent-posts')
-            time_excit = soup.find_all('time')
-            if main_content and time_excit:
-                error_sitmap = 'true'
-                link_list = main_content[0].find_all('time', {"class": "post-meta-date-created"})
-                if link_list == []:
-                    print('该页面无文章生成日期')
-                    link_list = main_content[0].find_all('time')
-                else:
-                    print('该页面有文章生成日期')
-                lasttime = datetime.datetime.strptime('1970-01-01', "%Y-%m-%d")
-                for index, item in enumerate(link_list):
-                    time = item.text
-                    if lasttime < datetime.datetime.strptime(time, "%Y-%m-%d"):
-                        lasttime = datetime.datetime.strptime(time, "%Y-%m-%d")
-                lasttime = lasttime.strftime('%Y-%m-%d')
-                print('最新时间是', lasttime)
-                last_post_list = main_content[0].find_all('div', {"class": "recent-post-info"})
-                for item in last_post_list:
-                    time_created = item.find('time', {"class": "post-meta-date-created"})
-                    if time_created:
-                        pass
-                    else:
-                        time_created = item
-                    if time_created.find(text=lasttime):
-                        error_sitmap = 'false'
-                        print(lasttime)
-                        a = item.find('a')
-                        # print(item.find('a'))
-                        alink = a['href']
-                        alinksplit = alink.split("/", 1)
-                        stralink = alinksplit[1].strip()
-                        if link[-1] != '/':
-                            link = link + '/'
-                        print(a.text)
-                        print(link + stralink)
-                        print("-----------获取到匹配结果----------")
-                        post_info = {
-                            'title': a.text,
-                            'time': lasttime,
-                            'link': link + stralink,
-                            'name': user_info[0],
-                            'img': user_info[2]
-                        }
-                        post_poor.append(post_info)
-            else:
-                error_sitmap = 'true'
-                print('貌似不是类似butterfly主题！')
-            print("-----------结束主页规则----------")
-            print('\n')
-            return error_sitmap
-
-        # 主方法获取友链池
-
         # 引入leancloud验证
         leancloud.init(sys.argv[1], sys.argv[2])
         friendpage_link = sys.argv[3]
@@ -431,10 +367,6 @@ def main():
         print('\n')
         today = datetime.datetime.today()
         time_limit = 60
-        result = get_data(friendpage_link)
-        soup = BeautifulSoup(result, 'html.parser')
-        main_content = soup.find_all(id='article-container')
-        link_list = main_content[0].find_all('a')
         friend_poor = []
         post_poor = []
         print('----------------------')
@@ -444,41 +376,14 @@ def main():
             kang_api(friend_poor)
         except:
             print('读取gitee友链失败')
-        for index, item in enumerate(link_list):
-            link = item.get('href')
-            if link.count('/') > 3:
-                continue
-            if item.get('title'):
-                name = item.get('title')
-            else:
-                try:
-                    name = item.find('span').text
-                except:
-                    continue
-            try:
-                if len(item.find_all('img')) > 1:
-                    imglist = item.find_all('img')
-                    img = imglist[1].get('data-lazy-src')
-                else:
-                    imglist = item.find_all('img')
-                    img = imglist[0].get('data-lazy-src')
-            except:
-                continue
-            if "#" in link:
-                pass
-            else:
-                user_info = []
-                user_info.append(name)
-                user_info.append(link)
-                user_info.append(img)
-                print('----------------------')
-                try:
-                    print('好友名%r' % name)
-                except:
-                    print('非法用户名')
-                print('头像链接%r' % img)
-                print('主页链接%r' % link)
-                friend_poor.append(user_info)
+        try:
+            butterfly.butterfly_get_friendlink(friendpage_link,friend_poor)
+        except:
+            print('不是butterfly主题')
+        try:
+            matery.matery_get_friendlink(friendpage_link,friend_poor)
+        except:
+            print('不是matery主题')
         friend_poor = delete_same_link(friend_poor)
         print('当前友链数量',len( friend_poor))
         print('----------------------')
@@ -490,7 +395,9 @@ def main():
             error = 'false'
             try:
                 total_count += 1
-                error = get_last_post(item)
+                error = butterfly.get_last_post_from_butterfly(item,post_poor)
+                if error == 'true':
+                    error = matery.get_last_post_from_matery(item,post_poor)
                 if error == 'true':
                     print("-----------获取主页信息失败，采取sitemap策略----------")
                     error = sitmap_get(item)
